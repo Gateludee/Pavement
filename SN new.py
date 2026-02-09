@@ -223,12 +223,8 @@ with col_right:
             # แสดงสมการ AASHTO
             st.markdown("---")
             st.markdown("#### 📐 AASHTO 1993 Design Equation:")
-            st.latex(r"""
-            \log_{10}(W_{18}) = Z_R \cdot S_o + 9.36\log_{10}(SN+1) - 0.20 + 
-            """)
-            st.latex(r"""
-            \frac{\log_{10}\left[\frac{\Delta PSI}{4.2-1.5}\right]}{0.40 + \frac{1094}{(SN+1)^{5.19}}} + 2.32\log_{10}(M_R) - 8.07
-            """)
+            st.latex(r"\log_{10}(W_{18}) = Z_R \cdot S_o + 9.36\log_{10}(SN+1) - 0.20")
+            st.latex(r"+ \frac{\log_{10}\left[\frac{\Delta PSI}{4.2-1.5}\right]}{0.40 + \frac{1094}{(SN+1)^{5.19}}} + 2.32\log_{10}(M_R) - 8.07")
         else:
             st.error("❌ ไม่สามารถคำนวณ SN ได้ กรุณาตรวจสอบข้อมูลนำเข้า")
     else:
@@ -364,9 +360,8 @@ with st.expander("ℹ️ คำอธิบายและคำแนะนำ"
     Structure Number คือตัวเลขที่แสดงถึงความแข็งแรงโครงสร้างของผิวทางลาดยาง
     
     **สมการคำนวณ:**
-```
+    
     SN = a₁ × D₁ × m₁ + a₂ × D₂ × m₂ + a₃ × D₃ × m₃
-```
     
     โดยที่:
     - **aᵢ** = Layer coefficient ของชั้นที่ i
@@ -392,17 +387,9 @@ with st.expander("ℹ️ คำอธิบายและคำแนะนำ"
 
 # Footer
 st.markdown("---")
-st.markdown("""
-<div style='text-align: center'>
-    <p>🛣️ AASHTO 1993 Pavement Design Calculator | Developed for Pavement Engineering</p>
-</div>
-""", unsafe_allow_html=True)
-```
-
----
-
-## 📄 ไฟล์ที่ 2: `requirements.txt`
-```
-streamlit>=1.28.0
-numpy>=1.24.0
-scipy>=1.11.0
+st.markdown(
+    "<div style='text-align: center'>"
+    "<p>🛣️ AASHTO 1993 Pavement Design Calculator | Developed for Pavement Engineering</p>"
+    "</div>", 
+    unsafe_allow_html=True
+)
