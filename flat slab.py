@@ -1,58 +1,57 @@
 import streamlit as st
 import math
 
-# ส่วนหัวโปรแกรม
-st.title("🏗️ โปรแกรมคำนวณพื้น PT แบบง่าย")
-st.markdown("สำหรับอาคาร 4 ชั้น (คำนวณต่อความกว้างพื้น 1 เมตร)")
+st.title("🏗️ PT Slab Thickness Finder")
+st.markdown("คำนวณหาความหนาพื้นที่ 'เหมาะสมและปลอดภัย' สำหรับอาคาร 4 ชั้น")
 
-# --- แถบด้านข้าง: กรอกตัวเลข (เหมือนโค้ดแรก) ---
-st.sidebar.header("📋 ใส่ตัวเลขที่นี่")
-L = st.sidebar.number_input("ระยะห่างระหว่างเสา (เมตร)", value=8.0)
-live_load = st.sidebar.number_input("น้ำหนักคน/สิ่งของ (kg/m²)", value=300)
-sd_load = st.sidebar.number_input("น้ำหนักกระเบื้อง/ผนัง (kg/m²)", value=150)
-t_cm = st.sidebar.number_input("ความหนาพื้นที่จะใช้ (ซม.)", value=20.0)
+# --- แถบด้านข้าง: กรอกข้อมูลที่คุณรู้ ---
+st.sidebar.header("📋 ข้อมูลการออกแบบ")
+L_long = st.sidebar.number_input("ระยะเสาด้านยาว (เมตร)", value=8.0)
+L_short = st.sidebar.number_input("ระยะเสาด้านสั้น (เมตร)", value=6.0)
 
-# --- ส่วนคำนวณ (สูตรลับวิศวกร) ---
-# 1. น้ำหนักพื้น (คอนกรีตหนัก 2400 kg ต่อลูกบาศก์เมตร)
-self_weight = (t_cm / 100) * 2400
-total_load = self_weight + sd_load + live_load
+st.sidebar.divider()
+live_load = st.sidebar.number_input("น้ำหนักบรรทุกจร - LL (kg/m²)", value=300)
+dl_mep = st.sidebar.number_input("น้ำหนักพื้นผิว + MEP (kg/m²)", value=150)
 
-# 2. คำนวณแรงดึงลวด (P) เพื่อยกน้ำหนักพื้น 80%
-# สูตร: P = (weight * L^2) / (8 * ระยะดัดลวด)
-w_bal = 0.80 * self_weight
-sag = (t_cm - 5) / 100  # ระยะดัดลวดในเนื้อคอนกรีต
-p_force = (w_bal * (L**2)) / (8 * sag)
+# --- ขั้นตอนการหาความหนาที่เหมาะสม (Calculation Logic) ---
 
-# 3. จำนวนเส้นลวด (ลวด 1 เส้นรับแรงได้ 14,800 kg)
-num_strands = math.ceil(p_force / 14800)
+# 1. หาความหนาขั้นต่ำตามมาตรฐาน (L_long / 45) 
+# เป็นค่าเริ่มต้นที่พื้น PT มักจะเริ่ม 'นิ่ง' และไม่สั่น
+h_suggested = math.ceil((L_long * 100) / 45)
+if h_suggested < 15: h_suggested = 15 # มาตรฐานขั้นต่ำมักไม่น้อยกว่า 15 ซม.
 
-# 4. เช็คความปลอดภัย (P/A Stress)
-# คือการดูว่าแรงบีบเหมาะสมไหม (ต้องอยู่ระหว่าง 8.5 - 35)
-p_over_a = p_force / (100 * t_cm)
+# 2. คำนวณน้ำหนักเพื่อเช็คความปลอดภัย
+concrete_weight = (h_suggested / 100) * 2400
+total_load = concrete_weight + dl_mep + live_load
 
-# --- ส่วนแสดงผลหน้าจอหลัก ---
-st.header("🔍 ผลการคำนวณ")
+# 3. เช็คแรงเฉือนทะลุพื้น (Punching Shear) - หัวใจความปลอดภัย
+# สมมติเสาขนาด 30x30 ซม. และคอนกรีต f'c 320
+d = h_suggested - 3 # ระยะใช้งานจริง
+punching_area = 4 * (30 + d) * d
+v_u = total_load * (L_long * L_short) # แรงกดทั้งหมด
+v_c = 1.1 * math.sqrt(320) * punching_area # ความสามารถในการรับแรงของคอนกรีต
+
+# --- การแสดงผลสรุป ---
+st.header("📍 ความหนาที่แนะนำ")
+
+# แสดงความหนาที่คำนวณได้เป็นตัวใหญ่ๆ
+st.info(f"ความหนาพื้นที่เหมาะสมสำหรับโครงการของคุณคือ: **{h_suggested} เซนติเมตร**")
 
 col1, col2 = st.columns(2)
 with col1:
-    st.metric("น้ำหนักรวมที่พื้นต้องรับ", f"{total_load:.0f} kg/m²")
-    st.write(f"แยกเป็นน้ำหนักพื้นเอง: {self_weight:.0f} kg/m²")
+    st.metric("น้ำหนักรวม (Total Load)", f"{total_load:.0f} kg/m²")
+    st.write(f"- จากคอนกรีต: {concrete_weight:.0f} kg/m²")
+    st.write(f"- จาก LL+MEP: {live_load + dl_mep:.0f} kg/m²")
 
 with col2:
-    st.metric("จำนวนเส้นลวดที่ต้องใช้", f"{num_strands} เส้น")
-    st.write(f"แรงดึงลวดทั้งหมด: {p_force:,.0f} kg")
+    is_safe = v_c > v_u
+    status = "✅ ปลอดภัย (Safe)" if is_safe else "❌ เสี่ยงทะลุ (Need Thickness)"
+    st.metric("สถานะความปลอดภัย", status)
 
 st.divider()
 
-# --- บรรทัดสรุปผล (ตามที่ขอ) ---
-st.subheader("📢 สรุปผลการออกแบบ")
-
-if 8.5 <= p_over_a <= 35:
-    st.success(f"✅ ใช้ได้: ความหนา {t_cm} ซม. และลวด {num_strands} เส้น เหมาะสมตามมาตรฐาน")
+# --- บรรทัดสรุปส่งท้าย ---
+if is_safe:
+    st.success(f"สรุป: สำหรับระยะเสา {L_long}x{L_short} ม. แนะนำใช้พื้นหนา **{h_suggested} ซม.** โดยวางลวดประมาณ **{math.ceil(h_suggested*0.6)} เส้นต่อเมตร** จะได้พื้นที่มีประสิทธิภาพสูงสุดครับ")
 else:
-    if p_over_a < 8.5:
-        st.error(f"❌ ใช้ไม่ได้: แรงบีบน้อยไป (P/A = {p_over_a:.2f}) พื้นจะร้าว ให้ลดความหนาพื้น หรือเพิ่มจำนวนลวด")
-    else:
-        st.error(f"❌ ใช้ไม่ได้: แรงบีบมากไป (P/A = {p_over_a:.2f}) คอนกรีตจะแตก ให้เพิ่มความหนาพื้น")
-
-st.warning("⚠️ หมายเหตุ: ใช้สำหรับการประมาณการเบื้องต้นเท่านั้น ต้องให้วิศวกรวิชาชีพเซ็นรับรองแบบก่อนสร้างจริง")
+    st.error("คำเตือน: ระยะเสากว้างเกินไปสำหรับความหนานี้ แนะนำให้เพิ่มความหนาเป็นชั้นละ 2-3 ซม. จนกว่าสถานะจะเป็นสีเขียว")
