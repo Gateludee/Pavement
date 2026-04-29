@@ -1,61 +1,58 @@
 import streamlit as st
 import math
 
-# ส่วนหัวข้อ App
-st.title("🏗️ Flat Slab Design Helper")
-st.markdown("โปรแกรมช่วยคำนวณความหนาพื้นและแรงเฉือนเบื้องต้นสำหรับอาคาร 4 ชั้น")
+# ส่วนหัวโปรแกรม
+st.title("🏗️ โปรแกรมคำนวณพื้น PT แบบง่าย")
+st.markdown("สำหรับอาคาร 4 ชั้น (คำนวณต่อความกว้างพื้น 1 เมตร)")
 
-# --- Sidebar: รับค่า Input ---
-st.sidebar.header("📋 พารามิเตอร์ที่ต้องระบุ")
+# --- แถบด้านข้าง: กรอกตัวเลข (เหมือนโค้ดแรก) ---
+st.sidebar.header("📋 ใส่ตัวเลขที่นี่")
+L = st.sidebar.number_input("ระยะห่างระหว่างเสา (เมตร)", value=8.0)
+live_load = st.sidebar.number_input("น้ำหนักคน/สิ่งของ (kg/m²)", value=300)
+sd_load = st.sidebar.number_input("น้ำหนักกระเบื้อง/ผนัง (kg/m²)", value=150)
+t_cm = st.sidebar.number_input("ความหนาพื้นที่จะใช้ (ซม.)", value=20.0)
 
-# ระยะห่างเสา (Span)
-l_x = st.sidebar.number_input("ระยะช่วงเสาด้านสั้น (เมตร)", value=5.0, step=0.5)
-l_y = st.sidebar.number_input("ระยะช่วงเสาด้านยาว (เมตร)", value=6.0, step=0.5)
+# --- ส่วนคำนวณ (สูตรลับวิศวกร) ---
+# 1. น้ำหนักพื้น (คอนกรีตหนัก 2400 kg ต่อลูกบาศก์เมตร)
+self_weight = (t_cm / 100) * 2400
+total_load = self_weight + sd_load + live_load
 
-# น้ำหนักบรรทุก (Load)
-live_load = st.sidebar.number_input("น้ำหนักบรรทุกจร (kg/m²)", value=200, help="อาคารพักอาศัยทั่วไปประมาณ 150-200 kg/m²")
-superimposed_dead_load = st.sidebar.number_input("น้ำหนักวัสดุปูผิว/ผนัง (kg/m²)", value=150)
+# 2. คำนวณแรงดึงลวด (P) เพื่อยกน้ำหนักพื้น 80%
+# สูตร: P = (weight * L^2) / (8 * ระยะดัดลวด)
+w_bal = 0.80 * self_weight
+sag = (t_cm - 5) / 100  # ระยะดัดลวดในเนื้อคอนกรีต
+p_force = (w_bal * (L**2)) / (8 * sag)
 
-# วัสดุ (Materials)
-fc_prime = st.sidebar.number_input("กำลังอัดคอนกรีต f'c (kg/cm²)", value=240)
-fy = st.sidebar.number_input("กำลังรับแรงดึงเหล็กเสริม fy (kg/cm²)", value=4000)
+# 3. จำนวนเส้นลวด (ลวด 1 เส้นรับแรงได้ 14,800 kg)
+num_strands = math.ceil(p_force / 14800)
 
-# --- ส่วนคำนวณ ---
-st.header("🔍 ผลการวิเคราะห์")
+# 4. เช็คความปลอดภัย (P/A Stress)
+# คือการดูว่าแรงบีบเหมาะสมไหม (ต้องอยู่ระหว่าง 8.5 - 35)
+p_over_a = p_force / (100 * t_cm)
 
-# 1. หาความหนาพื้นขั้นต่ำ (Minimum Thickness)
-# สูตรประมาณการสำหรับ Flat Slab ทั่วไปคือ Span/30 ถึง Span/32
-min_thickness = (max(l_x, l_y) * 100) / 32 
-st.info(f"💡 ความหนาพื้นแนะนำเบื้องต้น: **{min_thickness:.2f} ซม.**")
+# --- ส่วนแสดงผลหน้าจอหลัก ---
+st.header("🔍 ผลการคำนวณ")
 
-t = st.number_input("ระบุความหนาพื้นที่คุณต้องการใช้ (ซม.)", value=float(math.ceil(min_thickness)))
-
-# 2. คำนวณน้ำหนักรวม (Total Load Calculation)
-concrete_density = 2400 # kg/m³
-dead_load = (t/100) * concrete_density
-total_load = dead_load + superimposed_dead_load + live_load
-
-# 3. คำนวณแรงเฉือนที่เสา (Punching Shear Check - Simplified)
-# พิจารณาเสาขนาด 30x30 ซม.
-column_size = 30 
-d = t - 3 # ระยะใช้งาน (หักระยะหุ้มเหล็กออก 3 ซม.)
-perimeter = 4 * (column_size + d) # เส้นรอบรูปวิกฤต
-v_u = total_load * (l_x * l_y) # แรงทั้งหมดที่ลงเสา 1 ต้น
-
-# กำลังรับแรงเฉือนของคอนกรีต (สูตรเบื้องต้น)
-# $V_c = 0.53 \times \sqrt{f'c} \times b_o \times d$ (หน่วย kg)
-v_c = 0.53 * math.sqrt(fc_prime) * perimeter * d
-
-# --- การแสดงผล ---
 col1, col2 = st.columns(2)
 with col1:
-    st.metric("น้ำหนักรวม (kg/m²)", f"{total_load:.0f}")
+    st.metric("น้ำหนักรวมที่พื้นต้องรับ", f"{total_load:.0f} kg/m²")
+    st.write(f"แยกเป็นน้ำหนักพื้นเอง: {self_weight:.0f} kg/m²")
+
 with col2:
-    status = "✅ ปลอดภัย" if v_c > v_u else "❌ หนาไม่พอ (พื้นอาจทะลุ)"
-    st.metric("สถานะแรงเฉือนรอบเสา", status)
+    st.metric("จำนวนเส้นลวดที่ต้องใช้", f"{num_strands} เส้น")
+    st.write(f"แรงดึงลวดทั้งหมด: {p_force:,.0f} kg")
 
-st.write(f"**แรงที่กระทำจริง ($V_u$):** {v_u:,.2f} kg")
-st.write(f"**ความสามารถในการรับแรงของคอนกรีต ($V_c$):** {v_c:,.2f} kg")
+st.divider()
 
-# หมายเหตุ
-st.warning("⚠️ โปรดทราบ: นี่เป็นการคำนวณเบื้องต้นเท่านั้น ในการก่อสร้างจริงต้องพิจารณาโมเมนต์ดัดและการจัดเหล็กเสริมโดยวิศวกรโยธาที่มีใบอนุญาต")
+# --- บรรทัดสรุปผล (ตามที่ขอ) ---
+st.subheader("📢 สรุปผลการออกแบบ")
+
+if 8.5 <= p_over_a <= 35:
+    st.success(f"✅ ใช้ได้: ความหนา {t_cm} ซม. และลวด {num_strands} เส้น เหมาะสมตามมาตรฐาน")
+else:
+    if p_over_a < 8.5:
+        st.error(f"❌ ใช้ไม่ได้: แรงบีบน้อยไป (P/A = {p_over_a:.2f}) พื้นจะร้าว ให้ลดความหนาพื้น หรือเพิ่มจำนวนลวด")
+    else:
+        st.error(f"❌ ใช้ไม่ได้: แรงบีบมากไป (P/A = {p_over_a:.2f}) คอนกรีตจะแตก ให้เพิ่มความหนาพื้น")
+
+st.warning("⚠️ หมายเหตุ: ใช้สำหรับการประมาณการเบื้องต้นเท่านั้น ต้องให้วิศวกรวิชาชีพเซ็นรับรองแบบก่อนสร้างจริง")
