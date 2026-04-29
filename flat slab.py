@@ -1,49 +1,73 @@
 import streamlit as st
 import math
 
-st.title("🏗️ Post-Tensioned Flat Slab Calculator")
-st.markdown("โปรแกรมคำนวณจำนวนเส้นลวด (Strands) และความหนาพื้นเบื้องต้น")
+# ตั้งค่าหน้าจอ
+st.set_page_config(page_title="PT Slab Designer", layout="wide")
 
-# --- Sidebar: Input ---
-st.sidebar.header("📋 ข้อมูลการออกแบบ (PT)")
-L = st.sidebar.number_input("ระยะช่วงเสาที่ยาวที่สุด (เมตร)", value=8.0, step=0.5)
-width = st.sidebar.number_input("ความกว้างของแถบพื้นที่จะคำนวณ (เมตร)", value=1.0, help="ปกติคำนวณต่อความกว้าง 1 เมตร")
-live_load = st.sidebar.number_input("น้ำหนักบรรทุกจร (kg/m²)", value=300)
-f_ci = st.sidebar.number_input("กำลังอัดคอนกรีตขณะดึงลวด (kg/cm²)", value=240)
+st.title("🏗️ Post-Tensioned Flat Slab Design Tool")
+st.subheader("เครื่องมือคำนวณพื้นอัดแรงเบื้องต้น สำหรับอาคาร 4 ชั้น")
 
-# --- ส่วนคำนวณ ---
-# 1. ประมาณความหนาพื้น (PT slab มักจะบางกว่า RC)
-# สูตรลัด: L / 40 ถึง L / 45
-t_estimated = (L * 100) / 45 
-t = st.number_input("ความหนาพื้น PT ที่เลือกใช้ (ซม.)", value=float(math.ceil(t_estimated)))
+# --- ส่วนรับข้อมูล (Input) ---
+with st.sidebar:
+    st.header("📋 พารามิเตอร์การออกแบบ")
+    
+    # มิติของพื้น
+    span_l = st.number_input("ระยะช่วงเสาด้านยาว (L) - เมตร", value=8.0, step=0.5)
+    span_s = st.number_input("ระยะช่วงเสาด้านสั้น (S) - เมตร", value=7.0, step=0.5)
+    
+    # น้ำหนักบรรทุก
+    live_load = st.number_input("น้ำหนักบรรทุกจร (kg/m²)", value=300, help="สำนักงาน=300, ที่พักอาศัย=200")
+    sd_load = st.number_input("น้ำหนักวัสดุปูผิวและผนัง (kg/m²)", value=150)
+    
+    # วัสดุ
+    fc_prime = st.number_input("กำลังอัดคอนกรีต f'c (kg/cm²)", value=320)
+    strand_type = st.selectbox("ชนิดเส้นลวด", ["0.5 inch (Grade 270)"])
 
-# 2. คำนวณน้ำหนัก
-dead_load = (t/100) * 2400
-total_load = dead_load + live_load
+# --- ขั้นตอนการคำนวณ ---
 
-# 3. คำนวณแรงดึงลวดเบื้องต้น (Prestressing Force)
-# ใช้หลักการ Balance Load (ชดเชยน้ำหนักบรรทุกประมาณ 60-80% ของ Dead Load)
-w_bal = 0.75 * dead_load 
-# สูตร Force (P) = (w_bal * L^2) / (8 * sag)
-sag = (t/100) - 0.05 # ระยะโก่งของลวด (หักระยะหุ้มบน-ล่าง)
-p_force = (w_bal * (L**2)) / (8 * sag)
+# 1. ประมาณความหนาพื้น (Thickness - h)
+# สำหรับ PT Slab มักใช้ Span/45 (ถ้า RC มักใช้ Span/32)
+h_min = (span_l * 100) / 45
+h_selected = st.slider("เลือกความหนาพื้นที่จะใช้ (ซม.)", 15, 30, int(math.ceil(h_min)))
 
-# 4. จำนวนเส้นลวด (Strands)
-# ลวด 1 เส้น (ขนาด 0.5 นิ้ว) รับแรงดึงปลอดภัยได้ประมาณ 14,000 - 15,000 kg
-strand_capacity = 14500
-num_strands = p_force / strand_capacity
+# 2. คำนวณน้ำหนัก (Load Calculation)
+self_weight = (h_selected / 100) * 2400 # คอนกรีตหนัก 2400 kg/m³
+total_dead_load = self_weight + sd_load
+total_load = total_dead_load + live_load
 
-# --- แสดงผล ---
-st.header("📊 สรุปผลการออกแบบเบื้องต้น")
-c1, c2, c3 = st.columns(3)
-c1.metric("ความหนาพื้น", f"{t} ซม.")
-c2.metric("น้ำหนักรวม", f"{total_load:.0f} kg/m²")
-c3.metric("จำนวนลวดที่ใช้", f"{math.ceil(num_strands)} เส้น/เมตร")
+# 3. คำนวณหาจำนวนลวด (Tendons Selection)
+# เราจะพยายามยก (Balance) น้ำหนักตัวเองของพื้น 80%
+w_balance = 0.80 * self_weight
 
-st.write(f"**แรงดึงลวดที่ต้องการ (P):** {p_force:,.2f} kg ต่อความกว้าง 1 เมตร")
+# ระยะดัดลวด (Sag) - สมมติระยะหุ้มคอนกรีต 2.5 ซม.
+# ระยะจากจุดศูนย์กลางลวดถึงขอบคอนกรีต
+cover = 2.5
+d_eff = h_selected - (cover * 2) # ระยะที่ลวดสามารถ "แอ่น" ได้
+sag = (d_eff / 100) 
 
-st.expander("📝 อธิบายเพิ่มเติมสำหรับมือใหม่").write("""
-- **Prestressing Force (P):** คือแรงที่เราดึงลวดให้ตึงเพื่อให้มันไปบีบอัดคอนกรีต
-- **Balance Load:** คือเทคนิคการทำให้ลวดรับน้ำหนักตัวมันเอง (Dead Load) ไว้ส่วนหนึ่ง ทำให้พื้นไม่แอ่น
-- **Strands:** คือเส้นลวดเหล็กตีเกลียวที่อยู่ในท่อ (Duct) ก่อนจะเทคอนกรีต
-""")
+# แรงดึงที่ต้องการ (Effective Prestress Force - P_e)
+# สูตร: P = (w_bal * L^2) / (8 * sag)
+p_effective = (w_balance * (span_l**2)) / (8 * sag)
+
+# ความสามารถในการรับแรงของลวด 1 เส้น (0.5") ประมาณ 14,000 - 14,800 kg
+strand_cap = 14800
+num_strands = p_effective / strand_cap
+
+# --- การแสดงผล (Output) ---
+col1, col2 = st.columns(2)
+
+with col1:
+    st.write("### 📐 สรุปขนาดและน้ำหนัก")
+    st.metric("ความหนาพื้น", f"{h_selected} ซม.")
+    st.metric("น้ำหนักพื้นรวม (Total Load)", f"{total_load:.2f} kg/m²")
+    st.write(f"- น้ำหนักพื้นเอง: {self_weight:.0f} kg/m²")
+    st.write(f"- น้ำหนักบรรทุกอื่น: {sd_load + live_load:.0f} kg/m²")
+
+with col2:
+    st.write("### 🧶 ผลการคำนวณลวดอัดแรง (PT)")
+    st.metric("จำนวนลวดที่แนะนำ", f"{math.ceil(num_strands)} เส้น/เมตร")
+    st.write(f"แรงดึงที่ต้องการทั้งหมด: **{p_effective:,.2f} kg/m**")
+    st.write(f"แรงต้านทานลวดต่อเส้น: {strand_cap} kg")
+
+st.divider()
+st.info("💡 **วิศวกรแนะนำ:** ระบบ PT สำหรับอาคาร 4 ชั้น ช่วยลดปริมาณคอนกรีตได้ถึง 20-30% เมื่อเทียบกับพื้นปกติ และช่วยให้งานระบบไฟฟ้า/ประปา เดินท่อได้ง่ายเพราะไม่มีคานขวาง")
